@@ -52,11 +52,7 @@
   </div>
   <div class="row" style="margin-top:10px">
     <div><label>模型</label>
-      <select id="model">
-        <option value="kimi-k2-0905-preview">kimi-k2-0905（推荐）</option>
-        <option value="kimi-k2-turbo-preview">kimi-k2-turbo（更快）</option>
-        <option value="moonshot-v1-8k">moonshot-v1-8k（便宜）</option>
-      </select></div>
+      <select id="model"></select></div>
     <div><label>语音播报目标语译文</label>
       <div class="auto"><input type="checkbox" id="autoSpeak" checked style="width:auto"> 翻译完成后自动播报</div></div>
   </div>
@@ -121,7 +117,7 @@ let rec = null, recOn = false;
 
 /* ---------- API key ---------- */
 function loadKey(){ const k = localStorage.getItem('kimi_key') || ''; $('apikey').value = k; keyHint(); }
-function saveKey(){ localStorage.setItem('kimi_key', $('apikey').value.trim()); keyHint('已保存到本机浏览器。'); }
+function saveKey(){ localStorage.setItem('kimi_key', $('apikey').value.trim()); keyHint('已保存到本机浏览器。'); refreshModels(); }
 function forgetKey(){ localStorage.removeItem('kimi_key'); $('apikey').value=''; keyHint('已清除。'); }
 function keyHint(msg){
   const has = !!localStorage.getItem('kimi_key');
@@ -130,6 +126,33 @@ function keyHint(msg){
          : '<span class="warn">未配置 Key：可在 platform.moonshot.cn 创建，填入后保存即可本机使用。</span>');
 }
 loadKey();
+refreshModels();
+
+/* 动态加载该 Key 实际可用的模型列表，避免模型名过时/无权限导致 404 */
+async function refreshModels(){
+  const sel = $('model'); const key = localStorage.getItem('kimi_key');
+  const fallback = ['kimi-k2.6','kimi-k3','kimi-k3.1-pro'];
+  const saved = localStorage.getItem('kimi_model');
+  let ids = [];
+  if(key){
+    try {
+      const r = await fetch('https://api.moonshot.cn/v1/models', { headers: { 'Authorization': 'Bearer ' + key } });
+      if(r.ok){
+        const d = await r.json();
+        ids = d.data.map(m => m.id);
+      }
+    } catch(e){}
+  }
+  if(!ids.length) ids = fallback;
+  sel.innerHTML = '';
+  ids.forEach(id => {
+    const o = document.createElement('option');
+    o.value = id; o.textContent = id;
+    sel.appendChild(o);
+  });
+  sel.value = (saved && ids.includes(saved)) ? saved : (ids.includes('kimi-k2.6') ? 'kimi-k2.6' : ids[0]);
+}
+$('model').addEventListener('change', () => localStorage.setItem('kimi_model', $('model').value));
 
 /* ---------- language UI ---------- */
 function swapLangs(){ const a=$('langA'), b=$('langB'); const t=a.value; a.value=b.value; b.value=t; refreshHints(); }
