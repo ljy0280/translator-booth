@@ -171,11 +171,14 @@ $('micBtn').onclick = () => {
 function currentText(){ return $('manualA').value.trim() || $('heard').textContent.trim(); }
 
 /* ---------- Kimi translation (streaming) ---------- */
+let translating = false, retryCount = 0;
 async function translateNow(){
+  if(translating){ return; } /* 防止语音识别自动触发与手动点击重复提交 */
   const text = currentText();
   if(!text || text.indexOf('识别结果')===0){ alert('请先说话识别或手动输入内容。'); return; }
   const key = localStorage.getItem('kimi_key');
   if(!key){ alert('请先在顶部填入并保存 Kimi API Key。'); return; }
+  translating = true;
   const btn = $('goBtn'); btn.disabled = true; btn.textContent = '⏳ 翻译中…';
   $('transStatus').innerHTML = '<span class="ok">正在调用 Kimi…</span>';
   $('textB').value = '';
@@ -219,11 +222,23 @@ async function translateNow(){
       }
     }
     $('transStatus').innerHTML = '<span class="ok">✓ 翻译完成</span>';
+    retryCount = 0;
     if($('autoSpeak').checked && out.trim()) speakB();
   } catch(e){
-    $('transStatus').innerHTML = '<span class="err">出错：' + String(e.message || e).replace(/</g,'&lt;') + '</span>';
+    const msg = String(e.message || e);
+    const m = msg.match(/try again after (\d+) seconds/);
+    if(/429|rate_limit/i.test(msg) && retryCount < 2){
+      retryCount++;
+      const wait = m ? (parseInt(m[1]) + 2) : 4;
+      $('transStatus').innerHTML = '<span class="warn">请求太频繁（账户限流），' + wait + ' 秒后自动重试（第 ' + retryCount + '/2 次）…</span>';
+      translating = false; btn.disabled = false;
+      setTimeout(translateNow, wait * 1000);
+      return;
+    }
+    retryCount = 0;
+    $('transStatus').innerHTML = '<span class="err">出错：' + msg.replace(/</g,'&lt;') + '</span>';
   } finally {
-    btn.disabled = false; btn.textContent = '⚡ 翻译并播报';
+    if(translating){ translating = false; btn.disabled = false; btn.textContent = '⚡ 翻译并播报'; }
   }
 }
 
